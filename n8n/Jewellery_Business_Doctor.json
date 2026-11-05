@@ -1,0 +1,560 @@
+{
+  "name": "Jewellery Business Doctor",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Submit",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "2456f412",
+      "name": "Submit Row Added",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Daily_Sales",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "sale_date",
+              "lookupValue": "={{ $now.toFormat('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {
+          "outputFormatting": {
+            "values": {
+              "general": "FORMATTED_VALUE",
+              "date": "FORMATTED_STRING"
+            }
+          }
+        }
+      },
+      "id": "27176ab4",
+      "name": "Read Sales",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into sales (sale_date, store, category, item, units, revenue)\nselect nullif($1::text,'')::date, $2::text, $3::text, $4::text, nullif($5::text,'')::int, nullif($6::text,'')::numeric\nwhere nullif($1::text,'') is not null\non conflict (sale_date, store, item) do update\nset category = excluded.category, units = excluded.units, revenue = excluded.revenue",
+        "options": {
+          "queryReplacement": "={{ [$json.sale_date ?? \"\", $json.store ?? \"\", $json.category ?? \"\", $json.item ?? \"\", String($json.units ?? \"\"), String($json.revenue ?? \"\")] }}"
+        }
+      },
+      "id": "b6ea79da",
+      "name": "Add Sales to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        448,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Stock_Current",
+          "mode": "name"
+        },
+        "options": {
+          "outputFormatting": {
+            "values": {
+              "general": "FORMATTED_VALUE",
+              "date": "FORMATTED_STRING"
+            }
+          }
+        }
+      },
+      "id": "351c3cfb",
+      "name": "Read Stock",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with upd as (update stock_by_store set item=$3, category=$4, units_in_stock=coalesce(nullif($5,'')::int, units_in_stock), reorder_level=coalesce(nullif($6,'')::int, reorder_level), stock_date=(case when $7::text ~ '^[0-9]+$' then date '1899-12-30' + $7::text::int else nullif($7::text,'')::date end) where item_code=$1 and store=$2 returning 1) insert into stock_by_store (item_code, item, category, store, units_in_stock, reorder_level, stock_date) select $1, $3, $4, $2, nullif($5,'')::int, nullif($6,'')::int, (case when $7::text ~ '^[0-9]+$' then date '1899-12-30' + $7::text::int else nullif($7::text,'')::date end) where not exists (select 1 from upd)",
+        "options": {
+          "queryReplacement": "={{ [$json.item_code ?? \"\", $json.store ?? \"\", $json.item ?? \"\", $json.category ?? \"\", String($json.units_in_stock ?? \"\"), String($json.reorder_level ?? \"\"), String($json.stock_date ?? \"\")] }}"
+        }
+      },
+      "id": "3f5e821f",
+      "name": "Update Stock in Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        896,
+        0
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update settings set stock_updated_on = (select max(stock_date) from stock_by_store)",
+        "options": {}
+      },
+      "id": "de4a578d",
+      "name": "Mark Stock Updated",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        1120,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Enquiries_Sheet",
+          "mode": "name"
+        },
+        "options": {
+          "outputFormatting": {
+            "values": {
+              "general": "FORMATTED_VALUE",
+              "date": "FORMATTED_STRING"
+            }
+          }
+        }
+      },
+      "id": "3c3400b2",
+      "name": "Read Enquiries",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1344,
+        0
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with upd as (\n  update enquiries\n  set enquiry_date = (case when $2::text ~ '^[0-9]+$' then date '1899-12-30' + $2::text::int else nullif($2::text,'')::date end),\n      customer = $3, item_asked = $4, store = $5, status = $6,\n      last_followup = (case when $7::text ~ '^[0-9]+$' then date '1899-12-30' + $7::text::int else nullif($7::text,'')::date end)\n  where enquiry_id = $1\n  returning 1)\ninsert into enquiries (enquiry_id, enquiry_date, customer, item_asked, store, status, last_followup)\nselect $1,\n       (case when $2::text ~ '^[0-9]+$' then date '1899-12-30' + $2::text::int else nullif($2::text,'')::date end),\n       $3, $4, $5, $6,\n       (case when $7::text ~ '^[0-9]+$' then date '1899-12-30' + $7::text::int else nullif($7::text,'')::date end)\nwhere not exists (select 1 from upd) and nullif($1::text,'') is not null",
+        "options": {
+          "queryReplacement": "={{ [$json.enquiry_id ?? \"\", String($json.enquiry_date ?? \"\"), $json.customer ?? \"\", $json.item_asked ?? \"\", $json.store ?? \"\", $json.status ?? \"\", String($json.last_followup ?? \"\")] }}"
+        }
+      },
+      "id": "edc5c45a",
+      "name": "Update Enquiries in Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        1568,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update settings set enquiries_updated_on = (now() at time zone 'Asia/Kolkata')::date",
+        "options": {}
+      },
+      "id": "bb742792",
+      "name": "Mark Enquiries Updated",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        1792,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select (select count(*) from v_data_status where status <> 'OK') = 0 as ready",
+        "options": {}
+      },
+      "id": "a8d2cbe9",
+      "name": "Check Sales, Stock and Enquiries Ready",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        2016,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ready",
+              "leftValue": "={{ $json.ready }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0d42798a",
+      "name": "All 3 Data Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select message from v_briefing;",
+        "options": {}
+      },
+      "id": "f7c2a742",
+      "name": "Get Briefing",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        2464,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_EMAIL@example.com",
+        "subject": "=Jewellery Business Doctor - {{ $now.toFormat('dd LLL yyyy') }}",
+        "emailType": "text",
+        "message": "={{ $json.message }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "c0d09e66",
+      "name": "Send Gmail Message",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2688,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into report_log (report_date) select report_date from v_dates on conflict do nothing",
+        "options": {}
+      },
+      "id": "2a9d081e",
+      "name": "Log Report Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        2912,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select message from v_briefing;",
+        "options": {}
+      },
+      "id": "4b85f73b",
+      "name": "Get Briefing1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        2464,
+        224
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_EMAIL@example.com",
+        "subject": "=Jewellery Business Doctor - {{ $now.toFormat('dd LLL yyyy') }}",
+        "emailType": "text",
+        "message": "={{ $json.message }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "48071268",
+      "name": "Send Gmail Message1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2672,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into report_log (report_date) select report_date from v_dates on conflict do nothing",
+        "options": {}
+      },
+      "id": "bc12bdec",
+      "name": "Log Report Sent1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        2864,
+        208
+      ],
+      "executeOnce": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Submit Row Added": {
+      "main": [
+        [
+          {
+            "node": "Read Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Sales": {
+      "main": [
+        [
+          {
+            "node": "Add Sales to Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Sales to Database": {
+      "main": [
+        [
+          {
+            "node": "Read Stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Stock": {
+      "main": [
+        [
+          {
+            "node": "Update Stock in Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Stock in Database": {
+      "main": [
+        [
+          {
+            "node": "Mark Stock Updated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Stock Updated": {
+      "main": [
+        [
+          {
+            "node": "Read Enquiries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Enquiries": {
+      "main": [
+        [
+          {
+            "node": "Update Enquiries in Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Enquiries in Database": {
+      "main": [
+        [
+          {
+            "node": "Mark Enquiries Updated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Enquiries Updated": {
+      "main": [
+        [
+          {
+            "node": "Check Sales, Stock and Enquiries Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Sales, Stock and Enquiries Ready": {
+      "main": [
+        [
+          {
+            "node": "All 3 Data Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All 3 Data Ready?": {
+      "main": [
+        [
+          {
+            "node": "Get Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Briefing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Briefing": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Gmail Message": {
+      "main": [
+        [
+          {
+            "node": "Log Report Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Briefing1": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Gmail Message1": {
+      "main": [
+        [
+          {
+            "node": "Log Report Sent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "nodeGroups": [],
+  "tags": []
+}
